@@ -30,6 +30,18 @@ export class AttendanceService {
         return { success: true, count: entites.length };
     }
 
+    async getMyAttendance(studentId: string): Promise<{
+        totalSessions: number;
+        presentSessions: number;
+        attendanceRate: number;
+    }> {
+        const records = await this.attendanceRepo.find({ where: { studentId } });
+        const total = records.length;
+        const present = records.filter(r => r.isPresent).length;
+        const rate = total > 0 ? Math.round((present / total) * 100) : 0;
+        return { totalSessions: total, presentSessions: present, attendanceRate: rate };
+    }
+
     async getAttendanceForClass(classId: string, dateStr?: string) {
         // Find all records for a class
         const query = this.attendanceRepo.createQueryBuilder('a')

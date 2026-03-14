@@ -14,8 +14,23 @@ export class MessagesService {
     ) {}
 
     /** Save a new message and return it with sender/receiver populated */
-    async save(senderId: string, receiverId: string, content: string): Promise<Message> {
-        const msg = this.messageRepo.create({ senderId, receiverId, content });
+    async save(
+        senderId: string,
+        receiverId: string,
+        content: string,
+        attachment?: { url: string; name: string; size: number; type: string } | null,
+    ): Promise<Message> {
+        const msg = this.messageRepo.create({
+            senderId,
+            receiverId,
+            content,
+            ...(attachment && {
+                attachmentUrl: attachment.url,
+                attachmentName: attachment.name,
+                attachmentSize: attachment.size,
+                attachmentType: attachment.type,
+            }),
+        });
         const saved = await this.messageRepo.save(msg);
         return this.messageRepo.findOne({
             where: { id: saved.id },
@@ -28,6 +43,7 @@ export class MessagesService {
      * Returns one entry per unique counterpart, with last message + unread count.
      */
     async getConversations(userId: string): Promise<any[]> {
+        if (!userId) return [];
         // Get all distinct counterpart IDs
         const sent = await this.messageRepo
             .createQueryBuilder('m')
@@ -82,17 +98,30 @@ export class MessagesService {
             );
     }
 
-    /** Get message thread between two users, newest last */
-    async getThread(userAId: string, userBId: string, limit = 50): Promise<Message[]> {
-        return this.messageRepo.find({
-            where: [
-                { senderId: userAId, receiverId: userBId },
-                { senderId: userBId, receiverId: userAId },
-            ],
-            relations: ['sender', 'receiver'],
-            order: { createdAt: 'ASC' },
-            take: limit,
-        });
+    /** Get message thread between two users with optional cursor-based pagination */
+    async getThread(
+        userAId: string,
+        userBId: string,
+        limit = 50,
+        cursor?: string,
+    ): Promise<{ messages: Message[]; hasMore: boolean }> {
+        const qb = this.messageRepo.createQueryBuilder('m')
+            .where(
+                '(m.senderId = :a AND m.receiverId = :b) OR (m.senderId = :b AND m.receiverId = :a)',
+                { a: userAId, b: userBId },
+            )
+            .leftJoinAndSelect('m.sender', 'sender')
+            .leftJoinAndSelect('m.receiver', 'receiver')
+            .orderBy('m.createdAt', 'DESC')
+            .take(limit + 1);
+
+        if (cursor) {
+            qb.andWhere('m.createdAt < :cursor', { cursor });
+        }
+
+        const raw = await qb.getMany();
+        const hasMore = raw.length > limit;
+        return { messages: raw.slice(0, limit).reverse(), hasMore };
     }
 
     /** Mark all messages from senderId to receiverId as read */
@@ -103,8 +132,14 @@ export class MessagesService {
         );
     }
 
+    /** Broadcast a message from one sender to multiple receivers */
+    async broadcastToMany(senderId: string, receiverIds: string[], content: string): Promise<Message[]> {
+        return Promise.all(receiverIds.map(rid => this.save(senderId, rid, content)));
+    }
+
     /** Get all users except the current user for the "New Conversation" picker */
     async getUsers(currentUserId: string): Promise<User[]> {
+        if (!currentUserId) return [];
         return this.userRepo.find({
             where: { id: Not(currentUserId), isActive: true },
             order: { firstName: 'ASC' },

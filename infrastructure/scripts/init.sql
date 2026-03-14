@@ -1,6 +1,28 @@
 -- EXTENSIONS
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- ENABLE REALTIME
+-- This tells Supabase to broadcast changes to these tables.
+DO $$ 
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    CREATE PUBLICATION supabase_realtime;
+  END IF;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+-- Add tables to publication if not already there
+-- We do this individually to avoid failing the whole script if one is already added
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE submissions;
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE messages;
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE profiles;
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+
 -- DROP EXISTING TABLES AND TYPES TO ALLOW CLEAN RE-RUNS
 DROP TABLE IF EXISTS writing_submissions      CASCADE;
 DROP TABLE IF EXISTS analytics_events         CASCADE;
@@ -22,8 +44,10 @@ DROP TABLE IF EXISTS course_modules           CASCADE;
 DROP TABLE IF EXISTS courses                  CASCADE;
 DROP TABLE IF EXISTS student_progress         CASCADE;
 DROP TABLE IF EXISTS lesson_completions       CASCADE;
+DROP TABLE IF EXISTS submissions              CASCADE;
 
 -- Dropping SAF specific tables
+DROP TABLE IF EXISTS live_sessions            CASCADE;
 DROP TABLE IF EXISTS exam_submissions         CASCADE;
 DROP TABLE IF EXISTS exam_sections            CASCADE;
 DROP TABLE IF EXISTS mock_exams               CASCADE;
@@ -32,6 +56,8 @@ DROP TABLE IF EXISTS assignments              CASCADE;
 DROP TABLE IF EXISTS invoices                 CASCADE;
 DROP TABLE IF EXISTS classes                  CASCADE;
 DROP TABLE IF EXISTS branches                 CASCADE;
+DROP TABLE IF EXISTS resources                CASCADE;
+DROP TABLE IF EXISTS messages                 CASCADE;
 DROP TABLE IF EXISTS profiles                 CASCADE;
 
 -- Dropping types
@@ -47,9 +73,7 @@ CREATE TYPE user_role AS ENUM ('student', 'teacher', 'instructor', 'admin', 'sup
 CREATE TYPE cefr_level AS ENUM ('A1','A2','B1','B2','C1','C2');
 CREATE TYPE goethe_module AS ENUM ('hören','lesen','schreiben','sprechen');
 
--- PROFILES (linked to Supabase Auth - id matches auth.users.id)
--- NOTE: Supabase Auth manages authentication; this table stores app-specific profile data.
--- The id column is NOT auto-generated — it is supplied by Supabase Auth (UUID from auth.users).
+-- PROFILES
 CREATE TABLE IF NOT EXISTS profiles (
   id          UUID PRIMARY KEY,
   email       TEXT NOT NULL UNIQUE,
@@ -64,6 +88,20 @@ CREATE TABLE IF NOT EXISTS profiles (
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- DIRECT MESSAGES
+CREATE TABLE messages (
+  id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  sender_id        UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  receiver_id      UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  content          TEXT NOT NULL DEFAULT '',
+  is_read          BOOLEAN NOT NULL DEFAULT false,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  attachment_url   VARCHAR,
+  attachment_name  VARCHAR,
+  attachment_size  INTEGER,
+  attachment_type  VARCHAR
+);
+
 -- BRANCHES
 CREATE TABLE branches (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -73,20 +111,21 @@ CREATE TABLE branches (
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- CLASSES / COHORTS (School Management)
+-- CLASSES
 CREATE TABLE classes (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  name            VARCHAR(255) NOT NULL, -- e.g., "A1 Intensive - Accra"
+  name            VARCHAR(255) NOT NULL,
   branch_id       UUID REFERENCES branches(id),
   teacher_id      UUID REFERENCES profiles(id),
   cefr_level      cefr_level NOT NULL,
   start_date      DATE,
   end_date        DATE,
-  status          VARCHAR(50), -- 'enrolling', 'active', 'completed'
+  status          VARCHAR(50),
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- ENROLLMENTS
 CREATE TABLE class_enrollments (
   class_id        UUID REFERENCES classes(id),
   student_id      UUID REFERENCES profiles(id),
@@ -94,50 +133,7 @@ CREATE TABLE class_enrollments (
   PRIMARY KEY (class_id, student_id)
 );
 
--- INVOICES
-CREATE TABLE invoices (
-  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  student_id      UUID REFERENCES profiles(id) ON DELETE CASCADE,
-  cohort_name     VARCHAR(255) NOT NULL,
-  amount          DECIMAL(10, 2) NOT NULL,
-  date_issued     DATE NOT NULL DEFAULT CURRENT_DATE,
-  status          VARCHAR(50) DEFAULT 'Pending' -- 'Paid', 'Pending', 'Overdue'
-);
-
--- EXAMS (Mock & Practice)
-CREATE TABLE mock_exams (
-  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  title           VARCHAR(255),
-  cefr_level      cefr_level NOT NULL,
-  duration_mins   INT,
-  is_published    BOOLEAN DEFAULT false,
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE exam_sections (
-  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  mock_exam_id    UUID REFERENCES mock_exams(id),
-  module_type     goethe_module NOT NULL,
-  content         JSONB NOT NULL,
-  max_score       INT
-);
-
-CREATE TABLE exam_submissions (
-  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  student_id      UUID REFERENCES profiles(id),
-  mock_exam_id    UUID REFERENCES mock_exams(id),
-  score_lesen     INT,
-  score_horen     INT,
-  score_schreibung INT,
-  score_sprechen  INT,
-  teacher_feedback TEXT,
-  status          VARCHAR(50), -- 'submitted', 'grading', 'graded'
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- CURRICULUM BUILDER (LMS)
+-- COURSES
 CREATE TABLE courses (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   title VARCHAR(255) NOT NULL,
@@ -149,22 +145,7 @@ CREATE TABLE courses (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE course_modules (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  course_id UUID REFERENCES courses(id) ON DELETE CASCADE,
-  title VARCHAR(255) NOT NULL,
-  order_index INT NOT NULL
-);
-
-CREATE TABLE lessons (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  module_id UUID REFERENCES course_modules(id) ON DELETE CASCADE,
-  title VARCHAR(255) NOT NULL,
-  content_type VARCHAR(50) NOT NULL,
-  content_data JSONB,
-  order_index INT NOT NULL
-);
-
+-- ASSIGNMENTS
 CREATE TABLE assignments (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   course_id UUID REFERENCES courses(id) ON DELETE CASCADE,
@@ -173,58 +154,173 @@ CREATE TABLE assignments (
   due_date TIMESTAMP WITH TIME ZONE
 );
 
--- GAMIFICATION & DASHBOARD
+-- SUBMISSIONS
+CREATE TABLE submissions (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  assignment_id   UUID REFERENCES assignments(id) ON DELETE SET NULL,
+  student_id      UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  assignment_title VARCHAR(255) NOT NULL,
+  submission_type VARCHAR(50) NOT NULL,
+  cefr_level      cefr_level NOT NULL,
+  content_text    TEXT,
+  audio_url       TEXT,
+  status          VARCHAR(20) NOT NULL DEFAULT 'pending',
+  score           INT,
+  feedback        TEXT,
+  error_tags      TEXT[],
+  graded_by       UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  submitted_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  graded_at       TIMESTAMPTZ
+);
+
+-- COURSE MODULES
+CREATE TABLE course_modules (
+  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  course_id    UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  title        VARCHAR(255) NOT NULL,
+  order_index  INTEGER NOT NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- LESSONS
+CREATE TABLE lessons (
+  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  module_id    UUID NOT NULL REFERENCES course_modules(id) ON DELETE CASCADE,
+  title        VARCHAR(255) NOT NULL,
+  content_type VARCHAR(50) NOT NULL,
+  content_data JSONB,
+  order_index  INTEGER NOT NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- STUDENT PROGRESS
 CREATE TABLE student_progress (
-  student_id UUID REFERENCES profiles(id) ON DELETE CASCADE PRIMARY KEY,
-  xp_points INT DEFAULT 0,
-  streak_days INT DEFAULT 0,
+  student_id      UUID PRIMARY KEY REFERENCES profiles(id) ON DELETE CASCADE,
+  xp_points       INTEGER NOT NULL DEFAULT 0,
+  streak_days     INTEGER NOT NULL DEFAULT 0,
   last_active_date DATE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE lesson_completions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  student_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
-  lesson_id UUID REFERENCES lessons(id) ON DELETE CASCADE,
-  completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(student_id, lesson_id)
+-- RESOURCES
+CREATE TABLE resources (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  title           TEXT NOT NULL,
+  type            TEXT NOT NULL,
+  cefr_level      cefr_level NOT NULL,
+  file_url        TEXT NOT NULL,
+  file_name       TEXT NOT NULL,
+  file_size       INTEGER,
+  file_type       TEXT,
+  uploaded_by     UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  shared          BOOLEAN DEFAULT false,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- AUTO-CREATE PROFILE ON SUPABASE AUTH SIGNUP
--- This trigger fires whenever a new user is created in Supabase Auth.
--- It inserts a matching row in the public.profiles table automatically.
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
-DECLARE
-  v_role user_role;
-BEGIN
-  -- Safely extract role from app_metadata; default to 'student' if missing or invalid
-  BEGIN
-    v_role := (NEW.raw_app_meta_data->>'role')::user_role;
-  EXCEPTION WHEN invalid_text_representation OR others THEN
-    v_role := 'student'::user_role;
+-- LIVE CLASSROOM SESSIONS
+CREATE TABLE IF NOT EXISTS live_sessions (
+    id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    class_id      UUID REFERENCES classes(id) ON DELETE SET NULL,
+    host_id       UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    title         VARCHAR(255) NOT NULL,
+    status        VARCHAR(20) NOT NULL DEFAULT 'scheduled',
+    started_at    TIMESTAMPTZ,
+    ended_at      TIMESTAMPTZ,
+    recording_url TEXT,
+    resource_id   UUID REFERENCES resources(id) ON DELETE SET NULL,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- INVOICES
+CREATE TABLE invoices (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    student_id      UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    cohort_name     VARCHAR(255),
+    amount          DECIMAL(10, 2),
+    date_issued     DATE DEFAULT CURRENT_DATE,
+    status          VARCHAR(50) DEFAULT 'Pending'
+);
+
+-- SYNC PROFILES FROM AUTH
+INSERT INTO public.profiles (id, email, first_name, last_name, role)
+SELECT 
+  id, 
+  email, 
+  CASE 
+    WHEN (raw_user_meta_data->>'first_name') IS NOT NULL AND (raw_user_meta_data->>'first_name') <> '' THEN (raw_user_meta_data->>'first_name')
+    WHEN (raw_app_meta_data->>'role') = 'admin' THEN 'SAF'
+    ELSE ''
+  END, 
+  CASE 
+    WHEN (raw_user_meta_data->>'last_name') IS NOT NULL AND (raw_user_meta_data->>'last_name') <> '' THEN (raw_user_meta_data->>'last_name')
+    WHEN (raw_app_meta_data->>'role') = 'admin' THEN 'Administrator'
+    ELSE ''
+  END,
+  COALESCE((raw_app_meta_data->>'role')::user_role, 'student'::user_role)
+FROM auth.users
+ON CONFLICT (id) DO UPDATE SET
+  email = EXCLUDED.email,
+  first_name = CASE 
+    WHEN EXCLUDED.first_name <> '' THEN EXCLUDED.first_name 
+    WHEN public.profiles.role = 'admin' AND public.profiles.first_name = '' THEN 'SAF'
+    ELSE public.profiles.first_name 
+  END,
+  last_name = CASE 
+    WHEN EXCLUDED.last_name <> '' THEN EXCLUDED.last_name 
+    WHEN public.profiles.role = 'admin' AND public.profiles.last_name = '' THEN 'Administrator'
+    ELSE public.profiles.last_name 
   END;
 
-  IF v_role IS NULL THEN
-    v_role := 'student'::user_role;
-  END IF;
+-- RLS
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE submissions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE live_sessions ENABLE ROW LEVEL SECURITY;
 
-  INSERT INTO public.profiles (id, email, first_name, last_name, role)
-  VALUES (
-    NEW.id,
-    NEW.email,
-    COALESCE(NEW.raw_user_meta_data->>'first_name', ''),
-    COALESCE(NEW.raw_user_meta_data->>'last_name', ''),
-    v_role
-  )
-  ON CONFLICT (id) DO NOTHING;
+CREATE POLICY "Public profiles viewable" ON profiles FOR SELECT USING (true);
+CREATE POLICY "Student view own sub" ON submissions FOR SELECT TO authenticated USING (student_id = auth.uid());
+CREATE POLICY "Instructor manage all sub" ON submissions FOR ALL TO authenticated
+  USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('instructor', 'admin', 'superadmin')))
+  WITH CHECK (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('instructor', 'admin', 'superadmin')));
 
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+CREATE POLICY "Participants view live sessions" ON live_sessions FOR SELECT TO authenticated 
+  USING (
+    host_id = auth.uid() OR 
+    class_id IN (SELECT class_id FROM class_enrollments WHERE student_id = auth.uid()) OR
+    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('admin', 'superadmin'))
+  );
 
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+CREATE POLICY "Hosts manage live sessions" ON live_sessions FOR ALL TO authenticated
+  USING (host_id = auth.uid() OR EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('admin', 'superadmin')));
+
+-- SEED
+INSERT INTO branches (id, name, address) VALUES ('0b111111-1111-1111-1111-111111111111', 'Accra Main', 'Accra');
+INSERT INTO courses (id, title, cefr_level, is_published) VALUES ('03111111-1111-1111-1111-111111111111', 'German B1 Intensive', 'B1', true);
+INSERT INTO classes (id, name, branch_id, teacher_id, cefr_level, status)
+VALUES ('04111111-1111-1111-1111-111111111111', 'B1 Accra Morning', '0b111111-1111-1111-1111-111111111111', 
+  (SELECT id FROM profiles WHERE role = 'instructor' LIMIT 1), 'B1', 'active');
+INSERT INTO assignments (id, course_id, title, due_date)
+VALUES ('05111111-1111-1111-1111-111111111111', '03111111-1111-1111-1111-111111111111', 'Weekend Narrative Essay', NOW() + INTERVAL '7 days');
+
+DO $$
+DECLARE v_sid UUID;
+BEGIN
+    SELECT id INTO v_sid FROM profiles WHERE email = 'bfoh2g@yahoo.com' OR first_name ILIKE '%Ebenezer%' LIMIT 1;
+    IF v_sid IS NOT NULL THEN
+        INSERT INTO class_enrollments (class_id, student_id) VALUES ('04111111-1111-1111-1111-111111111111', v_sid);
+        INSERT INTO submissions (assignment_id, student_id, assignment_title, submission_type, cefr_level, content_text, status)
+        VALUES ('05111111-1111-1111-1111-111111111111', v_sid, 'Weekend Narrative Essay', 'writing', 'B1', 'Great essay content.', 'pending');
+        -- SEED RESOURCES
+        INSERT INTO resources (id, title, type, cefr_level, file_url, file_name, uploaded_by, shared)
+        VALUES (uuid_generate_v4(), 'B1 Grammar Essentials', 'Reference', 'B1', 
+          'https://yarditssvzaksyanwvha.supabase.co/storage/v1/object/public/resources/grammar_prep.pdf', 
+          'grammar_prep.pdf', (SELECT id FROM profiles WHERE role = 'instructor' LIMIT 1), true);
+
+        -- SEED INVOICES
+        INSERT INTO invoices (id, student_id, cohort_name, amount, status)
+        VALUES (uuid_generate_v4(), v_sid, 'German B1 Intensive - April 2024', 2500.00, 'Pending');
+    END IF;
+END $$;

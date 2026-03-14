@@ -22,7 +22,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
 
         // No token at all in dev → inject mock user based on route
         if (!request.headers.authorization && isDev) {
-            this.injectMockUser(request);
+            this.injectMockUser(request, null);
             return true;
         }
 
@@ -30,29 +30,48 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
         try {
             return await (super.canActivate(context) as Promise<boolean>);
         } catch {
-            // Token present but invalid — in dev only, fall back to mock user
-            // so admin portal works even if JWT secret isn't configured locally
+            // Token present but invalid — in dev only, decode (without verifying signature)
+            // to get the real user identity so data queries use correct IDs
             if (isDev) {
-                this.injectMockUser(request);
+                const token = (request.headers.authorization as string)?.replace('Bearer ', '');
+                this.injectMockUser(request, token || null);
                 return true;
             }
             return false;
         }
     }
 
-    // Student-only URL segments — anything else defaults to admin in dev
-    private readonly STUDENT_URL_SEGMENTS = ['student', 'vocabulary', 'dashboard/progress', 'lesson'];
-    private readonly TEACHER_URL_SEGMENTS = ['teacher', 'instructor', 'attendance'];
+    private injectMockUser(request: any, token: string | null) {
+        // Try to decode the real JWT to get the actual user identity (no signature check)
+        if (token) {
+            try {
+                // Decode JWT payload without verifying signature (base64url decode of middle segment)
+                const payloadB64 = token.split('.')[1];
+                const decoded = JSON.parse(Buffer.from(payloadB64, 'base64').toString('utf8')) as any;
+                if (decoded?.sub) {
+                    request.user = {
+                        id: decoded.sub,
+                        email: decoded.email || '',
+                        role: decoded.app_metadata?.role || UserRole.STUDENT,
+                        firstName: decoded.user_metadata?.first_name || '',
+                        lastName: decoded.user_metadata?.last_name || '',
+                        isActive: true,
+                    };
+                    return;
+                }
+            } catch { /* fall through to URL-based defaults */ }
+        }
 
-    private injectMockUser(request: any) {
+        // No token or undecodable — fall back to URL-based mock identity
         const url: string = request.url || '';
 
-        if (this.TEACHER_URL_SEGMENTS.some(seg => url.includes(seg))) {
+        const TEACHER_SEGS = ['teacher', 'instructor', 'attendance'];
+        const STUDENT_SEGS = ['student', 'vocabulary', 'dashboard/progress', 'lesson'];
+        if (TEACHER_SEGS.some(seg => url.includes(seg))) {
             request.user = { id: '00000000-0000-0000-0000-000000000003', role: UserRole.TEACHER, email: 'teacher@safinstitute.com' };
-        } else if (this.STUDENT_URL_SEGMENTS.some(seg => url.includes(seg))) {
+        } else if (STUDENT_SEGS.some(seg => url.includes(seg))) {
             request.user = { id: '00000000-0000-0000-0000-000000000001', role: UserRole.STUDENT, email: 'student@safinstitute.com', cefrLevel: 'A1' };
         } else {
-            // Default to admin for all other routes (exams, analytics, users, billing, classes, etc.)
             request.user = { id: '00000000-0000-0000-0000-000000000002', role: UserRole.ADMIN, email: 'admin@safinstitute.com' };
         }
     }

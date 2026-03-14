@@ -6,12 +6,12 @@ export class AssignmentEntity {
     @PrimaryGeneratedColumn('uuid')
     id: string;
 
-    @Column({ name: 'course_id' })
-    course_id: string;
-
     @ManyToOne(() => CourseEntity, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'course_id' })
     course: CourseEntity;
+
+    @Column({ name: 'course_id', type: 'uuid', insert: false, update: false })
+    course_id: string;
 
     @Column({ type: 'varchar', length: 255 })
     title: string;

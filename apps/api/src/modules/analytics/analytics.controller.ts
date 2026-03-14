@@ -11,7 +11,7 @@ export class AnalyticsController {
     constructor(private readonly analyticsService: AnalyticsService) { }
 
     @Get('admin-dashboard')
-    @Roles(UserRole.ADMIN)
+    @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
     async getDashboardMetrics(@Query('branch') branch?: string) {
         return this.analyticsService.getAdminDashboardMetrics(branch);
     }

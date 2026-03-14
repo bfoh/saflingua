@@ -1,0 +1,58 @@
+-- ENABLRE REALTIME
+-- This tells Supabase to broadcast changes to these tables.
+DO $$ 
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    CREATE PUBLICATION supabase_realtime;
+  END IF;
+EXCEPTION WHEN OTHERS THEN
+  -- Handle case where it already exists or other errors
+  NULL;
+END $$;
+
+-- Try to add tables to publication. 
+-- We use separate statements and ignore errors if they are already in the publication.
+ALTER PUBLICATION supabase_realtime ADD TABLE messages;
+ALTER PUBLICATION supabase_realtime ADD TABLE submissions;
+ALTER PUBLICATION supabase_realtime ADD TABLE profiles;
+
+-- EXTENSIONS
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- DROP EXISTING TABLES AND TYPES TO ALLOW CLEAN RE-RUNS
+DROP TABLE IF EXISTS writing_submissions      CASCADE;
+DROP TABLE IF EXISTS analytics_events         CASCADE;
+DROP TABLE IF EXISTS user_badges              CASCADE;
+DROP TABLE IF EXISTS badges                   CASCADE;
+DROP TABLE IF EXISTS user_streaks             CASCADE;
+DROP TABLE IF EXISTS xp_transactions          CASCADE;
+DROP TABLE IF EXISTS user_xp                  CASCADE;
+DROP TABLE IF EXISTS vocabulary_srs           CASCADE;
+DROP TABLE IF EXISTS vocabulary_items         CASCADE;
+DROP TABLE IF EXISTS vocabulary_lists         CASCADE;
+DROP TABLE IF EXISTS exercise_attempts        CASCADE;
+DROP TABLE IF EXISTS exercises                CASCADE;
+DROP TABLE IF EXISTS lesson_progress          CASCADE;
+DROP TABLE IF EXISTS class_enrollments        CASCADE;
+DROP TABLE IF EXISTS enrollments              CASCADE;
+DROP TABLE IF EXISTS lessons                  CASCADE;
+DROP TABLE IF EXISTS course_modules           CASCADE;
+DROP TABLE IF EXISTS courses                  CASCADE;
+DROP TABLE IF EXISTS student_progress         CASCADE;
+DROP TABLE IF EXISTS lesson_completions       CASCADE;
+DROP TABLE IF EXISTS submissions              CASCADE;
+
+-- Dropping SAF specific tables
+DROP TABLE IF EXISTS exam_submissions         CASCADE;
+DROP TABLE IF EXISTS exam_sections            CASCADE;
+DROP TABLE IF EXISTS mock_exams               CASCADE;
+DROP TABLE IF EXISTS class_enrollments        CASCADE;
+DROP TABLE IF EXISTS assignments              CASCADE;
+DROP TABLE IF EXISTS invoices                 CASCADE;
+DROP TABLE IF EXISTS classes                  CASCADE;
+DROP TABLE IF EXISTS branches                 CASCADE;
+DROP TABLE IF EXISTS resources                CASCADE;
+DROP TABLE IF EXISTS messages                 CASCADE;
+DROP TABLE IF EXISTS profiles                 CASCADE;
+
+-- ... (rest of the file)

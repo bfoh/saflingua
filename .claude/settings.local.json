@@ -9,7 +9,8 @@
       "Bash(pkill:*)",
       "Bash(npx:*)",
       "Bash(grep:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(cat \"/Users/ebenezerbarning/Desktop/SAFlinguameister/apps/lms-web/src/app/admin/\\(portal\\)/messages/page.tsx\")"
     ]
   }
 }

@@ -19,6 +19,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
 import { MessagesModule } from './modules/messages/messages.module';
+import { LiveClassroomModule } from './modules/live-classroom/live-classroom.module';
 
 @Module({
     imports: [
@@ -59,6 +60,7 @@ import { MessagesModule } from './modules/messages/messages.module';
         AnalyticsModule,
         AttendanceModule,
         MessagesModule,
+        LiveClassroomModule,
     ],
     controllers: [AppController],
     providers: [AppService],

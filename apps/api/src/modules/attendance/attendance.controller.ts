@@ -4,11 +4,19 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '../../common/enums';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { User } from '../users/entities/user.entity';
 
 @Controller('attendance')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class AttendanceController {
     constructor(private readonly attendanceService: AttendanceService) { }
+
+    // Accessible to any authenticated user — no @Roles = RolesGuard passes through
+    @Get('me')
+    async getMyAttendance(@CurrentUser() user: User) {
+        return this.attendanceService.getMyAttendance(user.id);
+    }
 
     @Post('class/:classId')
     @Roles(UserRole.TEACHER, UserRole.ADMIN)

@@ -29,11 +29,21 @@ export class AuthService {
         role?: string;
         cefrLevel?: string;
     }) {
-        const role = data.role || 'student';
+        let role = data.role;
+
+        // If role not provided, fetch current metadata from Supabase to avoid overwriting with 'student'
+        if (!role) {
+            const { data: { user }, error } = await this.supabaseAdmin.auth.admin.getUserById(userId);
+            if (user?.app_metadata?.role) {
+                role = user.app_metadata.role;
+            }
+        }
+
+        const finalRole = role || 'student';
 
         // Update app_metadata in Supabase Auth so the JWT contains the role
         await this.supabaseAdmin.auth.admin.updateUserById(userId, {
-            app_metadata: { role },
+            app_metadata: { role: finalRole },
         });
 
         // Upsert profile row in our database
@@ -42,7 +52,7 @@ export class AuthService {
             email: data.email,
             firstName: data.firstName,
             lastName: data.lastName,
-            role: role as any,
+            role: finalRole as any,
             ...(data.cefrLevel ? { cefrLevel: data.cefrLevel as any } : {}),
         });
     }

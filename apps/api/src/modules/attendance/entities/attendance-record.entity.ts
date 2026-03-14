@@ -9,14 +9,14 @@ export class AttendanceRecordEntity extends BaseEntity {
     @JoinColumn({ name: 'class_id' })
     class: ClassEntity;
 
-    @Column({ name: 'class_id' })
+    @Column({ name: 'class_id', type: 'uuid', insert: false, update: false })
     classId: string;
 
     @ManyToOne(() => User, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'student_id' })
     student: User;
 
-    @Column({ name: 'student_id' })
+    @Column({ name: 'student_id', type: 'uuid', insert: false, update: false })
     studentId: string;
 
     @Column({ type: 'date', default: () => 'CURRENT_DATE' })

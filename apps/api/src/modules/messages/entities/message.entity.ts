@@ -19,7 +19,7 @@ export class Message {
     @Column({ name: 'receiver_id', type: 'uuid' })
     receiverId: string;
 
-    @Column({ type: 'text' })
+    @Column({ type: 'text', default: '' })
     content: string;
 
     @Column({ name: 'is_read', default: false })
@@ -27,6 +27,18 @@ export class Message {
 
     @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
     createdAt: Date;
+
+    @Column({ name: 'attachment_url', type: 'varchar', nullable: true })
+    attachmentUrl: string | null;
+
+    @Column({ name: 'attachment_name', type: 'varchar', nullable: true })
+    attachmentName: string | null;
+
+    @Column({ name: 'attachment_size', type: 'integer', nullable: true })
+    attachmentSize: number | null;
+
+    @Column({ name: 'attachment_type', type: 'varchar', nullable: true })
+    attachmentType: string | null;
 
     @ManyToOne(() => User, { eager: true, onDelete: 'CASCADE' })
     @JoinColumn({ name: 'sender_id' })

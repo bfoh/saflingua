@@ -1,7 +1,9 @@
 export enum UserRole {
     STUDENT = 'student',
     TEACHER = 'teacher',
+    INSTRUCTOR = 'instructor',
     ADMIN = 'admin',
+    SUPERADMIN = 'superadmin',
 }
 
 export enum CefrLevel {

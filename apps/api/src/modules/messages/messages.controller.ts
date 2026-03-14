@@ -1,34 +1,78 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, BadRequestException } from '@nestjs/common';
 import { MessagesService } from './messages.service';
+import { MessagesGateway } from './messages.gateway';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { User } from '../users/entities/user.entity';
-import { Public } from '../../common/decorators/public.decorator';
 
 @Controller('messages')
 export class MessagesController {
-    constructor(private readonly messagesService: MessagesService) {}
+    constructor(
+        private readonly messagesService: MessagesService,
+        private readonly messagesGateway: MessagesGateway,
+    ) {}
 
     /** GET /api/messages/users — all users the current user can message */
-    @Public()
     @Get('users')
     async getUsers(@CurrentUser() user: User) {
-        const id = user?.id || '00000000-0000-0000-0000-000000000001';
-        return this.messagesService.getUsers(id);
+        return this.messagesService.getUsers(user.id);
     }
 
     /** GET /api/messages/conversations — all conversations for current user */
-    @Public()
     @Get('conversations')
     async getConversations(@CurrentUser() user: User) {
-        const id = user?.id || '00000000-0000-0000-0000-000000000001';
-        return this.messagesService.getConversations(id);
+        return this.messagesService.getConversations(user.id);
     }
 
-    /** GET /api/messages/thread/:userId — message history with a specific user */
-    @Public()
+    /** GET /api/messages/thread/:userId?cursor=<ISO>&limit=<n> — message history */
     @Get('thread/:userId')
-    async getThread(@CurrentUser() user: User, @Param('userId') otherId: string) {
-        const id = user?.id || '00000000-0000-0000-0000-000000000001';
-        return this.messagesService.getThread(id, otherId);
+    async getThread(
+        @CurrentUser() user: User,
+        @Param('userId') otherId: string,
+        @Query('cursor') cursor?: string,
+        @Query('limit') limit?: string,
+    ) {
+        return this.messagesService.getThread(
+            user.id,
+            otherId,
+            limit ? parseInt(limit, 10) : 50,
+            cursor,
+        );
+    }
+
+    /** POST /api/messages/broadcast — send a message to multiple recipients at once */
+    @Post('broadcast')
+    async broadcast(
+        @CurrentUser() user: User,
+        @Body() body: { receiverIds: string[]; content: string },
+    ) {
+        if (!Array.isArray(body.receiverIds) || body.receiverIds.length === 0 || !body.content?.trim()) {
+            throw new BadRequestException('receiverIds (non-empty array) and content are required');
+        }
+        const messages = await this.messagesService.broadcastToMany(
+            user.id, body.receiverIds, body.content.trim(),
+        );
+        // Push real-time notification to each receiver's socket room
+        for (const msg of messages) {
+            const payload = {
+                id: msg.id,
+                senderId: msg.senderId,
+                receiverId: msg.receiverId,
+                content: msg.content,
+                isRead: msg.isRead,
+                createdAt: msg.createdAt,
+                sender: {
+                    id: msg.sender?.id,
+                    firstName: msg.sender?.firstName,
+                    lastName: msg.sender?.lastName,
+                    email: msg.sender?.email,
+                },
+                attachmentUrl: null,
+                attachmentName: null,
+                attachmentSize: null,
+                attachmentType: null,
+            };
+            this.messagesGateway.server.to(msg.receiverId).emit('new_message', payload);
+        }
+        return { sent: messages.length };
     }
 }

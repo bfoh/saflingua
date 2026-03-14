@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Put, Delete, Patch } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Put, Delete, Patch, ParseUUIDPipe } from '@nestjs/common';
 import { CoursesService } from './courses.service';
 import { Public } from '../../common/decorators/public.decorator';
 
@@ -15,7 +15,7 @@ export class CoursesController {
 
     @Get(':id')
     @Public()
-    findOne(@Param('id') id: string) {
+    findOne(@Param('id', ParseUUIDPipe) id: string) {
         return this.coursesService.findOne(id);
     }
 
@@ -27,39 +27,39 @@ export class CoursesController {
 
     @Patch(':id')
     @Public()
-    update(@Param('id') id: string, @Body() updateCourseDto: any) {
+    update(@Param('id', ParseUUIDPipe) id: string, @Body() updateCourseDto: any) {
         return this.coursesService.update(id, updateCourseDto);
     }
 
     @Delete(':id')
     @Public()
-    remove(@Param('id') id: string) {
+    remove(@Param('id', ParseUUIDPipe) id: string) {
         return this.coursesService.remove(id);
     }
 
     // Module Level Endpoints
     @Post(':courseId/modules')
     @Public()
-    addModule(@Param('courseId') courseId: string, @Body() moduleDto: any) {
+    addModule(@Param('courseId', ParseUUIDPipe) courseId: string, @Body() moduleDto: any) {
         return this.coursesService.addModule(courseId, moduleDto);
     }
 
     @Delete('modules/:moduleId')
     @Public()
-    removeModule(@Param('moduleId') moduleId: string) {
+    removeModule(@Param('moduleId', ParseUUIDPipe) moduleId: string) {
         return this.coursesService.removeModule(moduleId);
     }
 
     // Lesson Level Endpoints
     @Post('modules/:moduleId/lessons')
     @Public()
-    addLesson(@Param('moduleId') moduleId: string, @Body() lessonDto: any) {
+    addLesson(@Param('moduleId', ParseUUIDPipe) moduleId: string, @Body() lessonDto: any) {
         return this.coursesService.addLesson(moduleId, lessonDto);
     }
 
     @Delete('lessons/:lessonId')
     @Public()
-    removeLesson(@Param('lessonId') lessonId: string) {
+    removeLesson(@Param('lessonId', ParseUUIDPipe) lessonId: string) {
         return this.coursesService.removeLesson(lessonId);
     }
 }
