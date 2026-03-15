@@ -25,17 +25,14 @@ async function bootstrap() {
         origin: (origin, callback) => {
             // Allow requests with no origin (mobile apps, curl, etc.)
             if (!origin) return callback(null, true);
-            // Allow any localhost port in dev, plus the configured WEB_URL
+            // Allow any localhost port in dev, plus all configured production origins
             const allowed = [
-                process.env.WEB_URL || 'http://localhost:3000',
-                'http://localhost:3000',
-                'http://localhost:3001',
-                'http://localhost:3002',
-                'http://localhost:3003',
-                'http://localhost:3004',
-                'http://localhost:3005',
-            ];
-            if (allowed.includes(origin) || /^http:\/\/localhost:\d+$/.test(origin)) {
+                process.env.WEB_URL,
+                process.env.LMS_URL,
+                'https://safinstitute.netlify.app',
+                'https://saf-lms.netlify.app',
+            ].filter(Boolean) as string[];
+            if (/^http:\/\/localhost:\d+$/.test(origin) || allowed.includes(origin)) {
                 return callback(null, true);
             }
             return callback(new Error(`CORS: origin ${origin} not allowed`));
