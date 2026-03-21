@@ -1,0 +1,9 @@
+# Exclude development dependencies and source control noise
+node_modules/
+.git/
+.turbo/
+coverage/
+*.log
+
+# Keep apps/api/dist/ — it is needed at runtime
+# (Do NOT add dist/ here even though it's in .gitignore)
