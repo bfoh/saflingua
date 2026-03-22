@@ -1,0 +1,3 @@
+[submodule "apps/lms-web"]
+	path = apps/lms-web
+	url = https://github.com/bfoh/saf-lms-web.git
