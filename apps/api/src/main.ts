@@ -29,11 +29,12 @@ async function bootstrap() {
             const allowed = [
                 process.env.WEB_URL,
                 process.env.LMS_URL,
-                'https://safinstitute.netlify.app',
-                'https://saf-lms.netlify.app',
-                'https://saf-new.netlify.app',
             ].filter(Boolean) as string[];
-            if (/^http:\/\/localhost:\d+$/.test(origin) || allowed.includes(origin)) {
+            if (
+                /^http:\/\/localhost:\d+$/.test(origin) ||
+                /^https:\/\/[a-z0-9-]+\.netlify\.app$/.test(origin) ||
+                allowed.includes(origin)
+            ) {
                 return callback(null, true);
             }
             return callback(new Error(`CORS: origin ${origin} not allowed`));
