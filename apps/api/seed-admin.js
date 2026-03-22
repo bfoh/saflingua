@@ -1,14 +1,22 @@
 /**
  * Seed / fix admin user in Supabase Auth.
  * Run once: node seed-admin.js
+ * 
+ * Requires env vars: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
  */
 const { createClient } = require('@supabase/supabase-js');
 
-const SUPABASE_URL = 'https://yarditssvzaksyanwvha.supabase.co';
-const SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlhcmRpdHNzdnpha3N5YW53dmhhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3Mjk1NTI3MiwiZXhwIjoyMDg4NTMxMjcyfQ.63w_0Z2xilnfLja-taZBmjlFpCXO7NDEYCbnz91yMoM';
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
+    console.error('❌ Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables.');
+    console.error('   Usage: SUPABASE_URL=https://... SUPABASE_SERVICE_ROLE_KEY=eyJ... node seed-admin.js');
+    process.exit(1);
+}
 
 const ADMIN_EMAIL = 'admin@safinstitute.com';
-const ADMIN_PASSWORD = 'Admin@SAF2026!';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Admin@SAF2026!';
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -44,7 +52,6 @@ async function seedAdmin() {
 
         console.log('✅ Admin user updated:');
         console.log('   Email:', ADMIN_EMAIL);
-        console.log('   Password:', ADMIN_PASSWORD);
         console.log('   Role: admin');
     } else {
         console.log('➕ Admin user not found. Creating...');
@@ -68,13 +75,11 @@ async function seedAdmin() {
         console.log('✅ Admin user created:');
         console.log('   ID:', data.user.id);
         console.log('   Email:', ADMIN_EMAIL);
-        console.log('   Password:', ADMIN_PASSWORD);
         console.log('   Role: admin');
     }
 
     console.log('\n🎉 Done! Login at http://localhost:3000/admin/login');
     console.log('   Email:', ADMIN_EMAIL);
-    console.log('   Password:', ADMIN_PASSWORD);
 }
 
 seedAdmin().catch(console.error);

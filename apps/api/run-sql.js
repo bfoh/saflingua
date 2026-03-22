@@ -1,6 +1,12 @@
 const { Client } = require('pg');
 
-const connectionString = 'postgresql://postgres:Akowuah%401234@db.yarditssvzaksyanwvha.supabase.co:5432/postgres';
+const connectionString = process.env.DATABASE_URL;
+
+if (!connectionString) {
+    console.error('❌ Missing DATABASE_URL environment variable.');
+    console.error('   Usage: DATABASE_URL=postgresql://... node run-sql.js');
+    process.exit(1);
+}
 
 const client = new Client({ connectionString });
 
