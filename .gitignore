@@ -40,3 +40,6 @@ tsconfig.tsbuildinfo
 # Project specific logs
 *.log
 node_modules
+
+# Local Netlify folder
+.netlify

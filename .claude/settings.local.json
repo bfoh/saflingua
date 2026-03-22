@@ -10,7 +10,14 @@
       "Bash(npx:*)",
       "Bash(grep:*)",
       "Bash(curl:*)",
-      "Bash(cat \"/Users/ebenezerbarning/Desktop/SAFlinguameister/apps/lms-web/src/app/admin/\\(portal\\)/messages/page.tsx\")"
+      "Bash(cat \"/Users/ebenezerbarning/Desktop/SAFlinguameister/apps/lms-web/src/app/admin/\\(portal\\)/messages/page.tsx\")",
+      "Bash(xargs kill -9)",
+      "Bash(python3 -m json.tool)",
+      "Bash(git add apps/api/package.json apps/api/src/app.module.ts apps/api/src/main.ts apps/api/src/modules/courses/entities/course.entity.ts apps/api/src/modules/live-classroom/ apps/api/src/modules/appointments/ apps/website/package.json apps/website/src/App.tsx apps/website/src/index.css apps/website/src/pages/home/components/ apps/website/src/pages/home/page.tsx apps/website/src/components/ apps/website/src/hooks/useVapi.ts infrastructure/scripts/init.sql package-lock.json)",
+      "Bash(git commit:*)",
+      "Bash(git push origin main)",
+      "Bash(netlify status)",
+      "Bash(git add apps/api/tsconfig.build.json)"
     ]
   }
 }
