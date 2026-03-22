@@ -11,7 +11,7 @@ const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
     console.error('❌ Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables.');
-    console.error('   Usage: SUPABASE_URL=https://... SUPABASE_SERVICE_ROLE_KEY=eyJ... node seed-admin.js');
+    console.error('   Usage: SUPABASE_URL=<your-url> SUPABASE_SERVICE_ROLE_KEY=<your-key> node seed-admin.js');
     process.exit(1);
 }
 
